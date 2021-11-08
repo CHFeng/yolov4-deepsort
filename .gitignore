@@ -1,2 +1,4 @@
-__pycache__
 *.pyc
+yolov4.weights
+checkpoints
+__pycache__

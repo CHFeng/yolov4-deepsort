@@ -84,6 +84,8 @@ def main(_argv):
         infer = saved_model_loaded.signatures['serving_default']
 
     # begin video capture
+    # camera use 0 to open
+    # ipcam use rtsp://admin:aa888888@192.168.1.250
     try:
         vid = cv2.VideoCapture(int(video_path))
     except:
@@ -104,6 +106,7 @@ def main(_argv):
     detect_objs = []
     # while video is running
     while True:
+        start_time = time.time()
         return_value, frame = vid.read()
         if return_value:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -117,7 +120,6 @@ def main(_argv):
         image_data = cv2.resize(frame, (input_size, input_size))
         image_data = image_data / 255.0
         image_data = image_data[np.newaxis, ...].astype(np.float32)
-        start_time = time.time()
 
         # run detections on tflite if flag is set
         if FLAGS.framework == "tflite":
@@ -342,7 +344,13 @@ def main(_argv):
         for key in counter:
             if counter[key] == 0:
                 continue
-            cv2.putText(frame, "{}:{}".format(key, counter[key]), (5, 35 + idx * 18), 0, 0.75, (128, 0, 0), 1)
+            labelName = key
+            if FLAGS.flow_direction == "vertical":
+                if "up" in key:
+                    labelName = key.replace("up", "IN")
+                elif "down" in key:
+                    labelName = key.replace("down", "OUT")
+            cv2.putText(frame, "{}:{}".format(labelName, counter[key]), (5, 35 + idx * 25), 0, 0.75, (255, 0, 0), 1)
             idx += 1
         # calculate frames per second of running detections
         fps = 1.0 / (time.time() - start_time)
