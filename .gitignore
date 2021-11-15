@@ -2,3 +2,6 @@
 yolov4.weights
 checkpoints
 __pycache__
+.vscode
+demo
+outputs

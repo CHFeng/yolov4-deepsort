@@ -27,6 +27,9 @@ from deep_sort.detection import Detection
 from deep_sort.tracker import Tracker
 from tools import generate_detections as gdet
 
+# for capture streaming from youtube
+import pafy
+
 flags.DEFINE_string("framework", "tf", "(tf, tflite, trt")
 flags.DEFINE_string("weights", "./checkpoints/yolov4-416", "path to weights file")
 flags.DEFINE_integer("size", 416, "resize images to")
@@ -43,9 +46,12 @@ flags.DEFINE_boolean("count", False, "count objects being tracked on screen")
 # the setting of object flow direction
 flags.DEFINE_string("flow_direction", "horizontal", "horizontal or vertical")
 flags.DEFINE_integer("detect_pos", "520", "the position coordinate for detecting")
+flags.DEFINE_integer("detect_pos_x", "0", "the position coordinate for detecting")
+flags.DEFINE_integer("detect_pos_y", "0", "the position coordinate for detecting")
 flags.DEFINE_integer("detect_distance", "20", "the distance for detecting")
 flags.DEFINE_integer("object_speed", "5", "the speed of object")
 flags.DEFINE_boolean("frame_debug", False, "show frame one by one for debug")
+flags.DEFINE_string("allow_classes", "person,car,truck,bus,motorbike", "allowed classes")
 
 
 def main(_argv):
@@ -86,21 +92,45 @@ def main(_argv):
     # begin video capture
     # camera use 0 to open
     # ipcam use rtsp://admin:aa888888@192.168.1.250
+    # 南灣-https://www.youtube.com/watch?v=sZXBFjepdeQ
+    # 冷水坑停車場-https://www.youtube.com/watch?v=GB64WeZZQPQ
     try:
         vid = cv2.VideoCapture(int(video_path))
     except:
-        vid = cv2.VideoCapture(video_path)
+        if "https://www.youtube.com/watch?v" in video_path:
+            video = pafy.new(video_path)
+            best = video.getbest(preftype="mp4")
+            vid = cv2.VideoCapture(best.url)
+        else:
+            vid = cv2.VideoCapture(video_path)
 
     out = None
+
+    # get width & height from video
+    width = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     # get video ready to save locally if flag is set
     if FLAGS.output:
         # by default VideoCapture returns float instead of int
-        width = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = int(vid.get(cv2.CAP_PROP_FPS))
         codec = cv2.VideoWriter_fourcc(*FLAGS.output_format)
         out = cv2.VideoWriter(FLAGS.output, codec, fps, (width, height))
+
+    # read in all class names from config
+    class_names = utils.read_class_names(cfg.YOLO.CLASSES)
+
+    if FLAGS.allow_classes:
+        allowed_classes = FLAGS.allow_classes.split(",")
+    else:
+        # by default allow all classes in .names file
+        allowed_classes = list(class_names.values())
+    # custom allowed classes (uncomment line below to customize tracker for only people)
+    # allowed_classes = ["car", "truck", "bus", "motorbike", "bicycle"]
+
+    # the detection area line
+    line_pos_1 = FLAGS.detect_pos - FLAGS.detect_distance
+    line_pos_2 = FLAGS.detect_pos + FLAGS.detect_distance
 
     frame_num = 0
     detect_objs = []
@@ -178,35 +208,21 @@ def main(_argv):
         # store all predictions in one parameter for simplicity when calling functions
         pred_bbox = [bboxes, scores, classes, num_objects]
 
-        # read in all class names from config
-        class_names = utils.read_class_names(cfg.YOLO.CLASSES)
-
-        # by default allow all classes in .names file
-        # allowed_classes = list(class_names.values())
-
-        # custom allowed classes (uncomment line below to customize tracker for only people)
-        allowed_classes = ["person", "car", "truck", "bus", "motobike", "bicycle"]
-        # the width & height of video, (1920, 1080)
-        width = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        # the detection area line
-        line_pos_1 = FLAGS.detect_pos - FLAGS.detect_distance
-        line_pos_2 = FLAGS.detect_pos + FLAGS.detect_distance
         # draw the detection area line on the screen
         if FLAGS.flow_direction == "horizontal":
             # check detection area not over the screen
             if line_pos_1 > height or line_pos_2 > height:
                 print("the detection area:{}~{} over the screen:{}".format(line_pos_1, line_pos_2, height))
                 break
-            cv2.line(frame, (0, line_pos_1), (width, line_pos_1), (255, 0, 0), 2)
-            cv2.line(frame, (0, line_pos_2), (width, line_pos_2), (255, 0, 0), 2)
+            cv2.line(frame, (FLAGS.detect_pos_x, line_pos_1), (width, line_pos_1), (255, 0, 0), 2)
+            cv2.line(frame, (FLAGS.detect_pos_x, line_pos_2), (width, line_pos_2), (255, 0, 0), 2)
         else:
             # check detection area not over the screen
             if line_pos_1 > width or line_pos_2 > width:
                 print("the detection area:{}~{} over the screen:{}".format(line_pos_1, line_pos_2, width))
                 break
-            cv2.line(frame, (line_pos_1, 0), (line_pos_1, height), (255, 0, 0), 2)
-            cv2.line(frame, (line_pos_2, 0), (line_pos_2, height), (255, 0, 0), 2)
+            cv2.line(frame, (line_pos_1, FLAGS.detect_pos_y), (line_pos_1, height), (255, 0, 0), 2)
+            cv2.line(frame, (line_pos_2, FLAGS.detect_pos_y), (line_pos_2, height), (255, 0, 0), 2)
         # loop through objects and use class index to get class name, allow only classes in allowed_classes list
         names = []
         deleted_indx = []
@@ -301,27 +317,35 @@ def main(_argv):
                 tracked_pos = x_cen
             if tracked_pos > (FLAGS.detect_pos - FLAGS.detect_distance) and tracked_pos < (FLAGS.detect_pos + FLAGS.detect_distance):
                 print("Tracker In Area ID: {}, Class: {},  BBox Coords (x_cen, y_cen): {}".format(str(track.track_id), class_name, (x_cen, y_cen)))
-                existed = False
-                for obj in detect_objs:
-                    if obj['id'] == track.track_id:
-                        existed = True
-                        if FLAGS.flow_direction == "horizontal":
-                            orig_pos = obj['y_orig']
-                        else:
-                            orig_pos = obj['x_orig']
-                        diff = tracked_pos - orig_pos
-                        print('diff:%d' % diff)
-                        if obj['direction'] == "none":
-                            if diff >= FLAGS.object_speed:
-                                obj['direction'] = "down"
-                                orig_pos = tracked_pos
-                            elif diff <= -FLAGS.object_speed:
-                                obj['direction'] = "up"
-                                orig_pos = tracked_pos
-                # to append object into array if object doesn't existd
-                if not existed:
-                    obj = {"class": class_name, "id": track.track_id, "y_orig": y_cen, "x_orig": x_cen, "direction": "none"}
-                    detect_objs.append(obj)
+                checkDirection = True
+                # 當有設定FLAGS.detect_pos_y or FLAGS.detect_pos_x 需要物件位置大於設定值才計數
+                if FLAGS.detect_pos_y > 0 and y_cen < FLAGS.detect_pos_y:
+                    checkDirection = False
+                elif FLAGS.detect_pos_x > 0 and x_cen < FLAGS.detect_pos_y:
+                    checkDirection = False
+
+                if checkDirection:
+                    existed = False
+                    for obj in detect_objs:
+                        if obj['id'] == track.track_id:
+                            existed = True
+                            if FLAGS.flow_direction == "horizontal":
+                                orig_pos = obj['y_orig']
+                            else:
+                                orig_pos = obj['x_orig']
+                            diff = tracked_pos - orig_pos
+                            print('diff:%d' % diff)
+                            if obj['direction'] == "none":
+                                if diff >= FLAGS.object_speed:
+                                    obj['direction'] = "down"
+                                    orig_pos = tracked_pos
+                                elif diff <= -FLAGS.object_speed:
+                                    obj['direction'] = "up"
+                                    orig_pos = tracked_pos
+                    # to append object into array if object doesn't existd
+                    if not existed:
+                        obj = {"class": class_name, "id": track.track_id, "y_orig": y_cen, "x_orig": x_cen, "direction": "none"}
+                        detect_objs.append(obj)
             # if enable info flag then print details about each track
             if FLAGS.info:
                 print("Tracker ID: {}, Class: {},  BBox Coords (xmin, ymin, xmax, ymax): {}".format(str(
@@ -357,6 +381,8 @@ def main(_argv):
         print("FPS: %.2f" % fps)
         result = np.asarray(frame)
         result = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        # resize the ouput frame to 1280x720
+        result = cv2.resize(result, (1280, 720))
         # show image on screen
         if not FLAGS.dont_show:
             cv2.imshow("Output Video", result)
