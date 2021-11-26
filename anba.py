@@ -120,6 +120,8 @@ def main(_argv):
     detect_objs = []
     # while video is running
     frame_num = 0
+    # full screen flag
+    full_scrn = False
     while True:
         start_time = time.time()
         return_value, frame = vid.read()
