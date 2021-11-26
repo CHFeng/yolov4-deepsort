@@ -55,7 +55,7 @@ def decode_fourcc(cc):
 
 
 def write_to_file(inCounter, outCounter):
-    record = "進場人次:{} 離場人次:{} 時間:{}\n".format(inCounter, outCounter, dt.now())
+    record = "進場人次:{} 離場人次:{} 時間:{}\n".format(inCounter, outCounter, dt.now().strftime('%Y-%m-%d %H:%M'))
     with open('person_count.txt', 'a', encoding='utf-8') as f:
         f.write(record)
 
@@ -384,6 +384,8 @@ def main(_argv):
         # wirte data into file every 300 seconds
         diffTime = dt.now() - lastWriteTime
         if diffTime.seconds >= 300:
+            # update last time stamp
+            lastWriteTime = dt.now()
             write_to_file(counter['person-up'], counter['person-down'])
         # check exit when press keyboard 'q'
         key = cv2.waitKey(1)
