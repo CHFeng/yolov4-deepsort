@@ -20,15 +20,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tensorflow.compat.v1 import ConfigProto
 from tensorflow.compat.v1 import InteractiveSession
-
+from tools.display import open_window, set_display, show_fps
 # deep sort imports
 from deep_sort import preprocessing, nn_matching
 from deep_sort.detection import Detection
 from deep_sort.tracker import Tracker
 from tools import generate_detections as gdet
 
-# for capture streaming from youtube
-import pafy
+WINDOW_NAME = 'YOLOV4_WINDOW'
 
 flags.DEFINE_string("framework", "tf", "(tf, tflite, trt")
 flags.DEFINE_string("weights", "./checkpoints/yolov4-416", "path to weights file")
@@ -36,13 +35,8 @@ flags.DEFINE_integer("size", 416, "resize images to")
 flags.DEFINE_boolean("tiny", False, "yolo or yolo-tiny")
 flags.DEFINE_string("model", "yolov4", "yolov3 or yolov4")
 flags.DEFINE_string("video", "0", "path to input video or set to 0 for webcam")
-flags.DEFINE_string("output", None, "path to output video")
-flags.DEFINE_string("output_format", "XVID", "codec used in VideoWriter when saving video to file")
 flags.DEFINE_float("iou", 0.45, "iou threshold")
 flags.DEFINE_float("score", 0.50, "score threshold")
-flags.DEFINE_boolean("dont_show", False, "dont show video output")
-flags.DEFINE_boolean("info", False, "show detailed info of tracked objects")
-flags.DEFINE_boolean("count", False, "count objects being tracked on screen")
 # the setting of object flow direction
 flags.DEFINE_string("flow_direction", "horizontal", "horizontal or vertical")
 flags.DEFINE_integer("detect_pos", "520", "the position coordinate for detecting")
@@ -50,7 +44,7 @@ flags.DEFINE_integer("detect_pos_x", "0", "the position coordinate for detecting
 flags.DEFINE_integer("detect_pos_y", "0", "the position coordinate for detecting")
 flags.DEFINE_integer("detect_distance", "50", "the distance for detecting")
 flags.DEFINE_integer("object_speed", "10", "the speed of object")
-flags.DEFINE_boolean("frame_debug", False, "show frame one by one for debug")
+flags.DEFINE_boolean("frame_debug", True, "show frame one by one for debug")
 flags.DEFINE_string("allow_classes", "person", "allowed classes")
 
 
@@ -86,8 +80,6 @@ def main(_argv):
         interpreter.allocate_tensors()
         input_details = interpreter.get_input_details()
         output_details = interpreter.get_output_details()
-        print(input_details)
-        print(output_details)
     # otherwise load standard tensorflow saved model
     else:
         saved_model_loaded = tf.saved_model.load(FLAGS.weights, tags=[tag_constants.SERVING])
@@ -95,36 +87,18 @@ def main(_argv):
 
     # begin video capture
     # camera use 0 to open
-    # ipcam use rtsp://admin:aa888888@192.168.1.250
-    # 南灣-https://www.youtube.com/watch?v=sZXBFjepdeQ
-    # 冷水坑停車場-https://www.youtube.com/watch?v=GB64WeZZQPQ
     try:
         vid = cv2.VideoCapture(int(video_path))
         vid.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
         vid.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
-        print(decode_fourcc(vid.get(cv2.CAP_PROP_FOURCC)))
         vid.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
-        print(decode_fourcc(vid.get(cv2.CAP_PROP_FOURCC)))
+        # print(decode_fourcc(vid.get(cv2.CAP_PROP_FOURCC)))
     except:
-        if "https://www.youtube.com/watch?v" in video_path:
-            video = pafy.new(video_path)
-            best = video.getbest(preftype="mp4")
-            vid = cv2.VideoCapture(best.url)
-        else:
-            vid = cv2.VideoCapture(video_path)
-
-    out = None
+        vid = cv2.VideoCapture(video_path)
 
     # get width & height from video
     width = int(vid.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    # get video ready to save locally if flag is set
-    if FLAGS.output:
-        # by default VideoCapture returns float instead of int
-        fps = int(vid.get(cv2.CAP_PROP_FPS))
-        codec = cv2.VideoWriter_fourcc(*FLAGS.output_format)
-        out = cv2.VideoWriter(FLAGS.output, codec, fps, (width, height))
 
     # read in all class names from config
     class_names = utils.read_class_names(cfg.YOLO.CLASSES)
@@ -141,9 +115,11 @@ def main(_argv):
     line_pos_1 = FLAGS.detect_pos - FLAGS.detect_distance
     line_pos_2 = FLAGS.detect_pos + FLAGS.detect_distance
 
-    frame_num = 0
+    open_window(WINDOW_NAME, 'Welcome To Asia New Bay Area', 1920, 1080)
+    # array to store detected objects
     detect_objs = []
     # while video is running
+    frame_num = 0
     while True:
         start_time = time.time()
         return_value, frame = vid.read()
@@ -154,7 +130,8 @@ def main(_argv):
             print("Video has ended or failed, try a different video format!")
             break
         frame_num += 1
-        print("Frame #: ", frame_num)
+        if FLAGS.frame_debug:
+            print("Frame #: ", frame_num)
         frame_size = frame.shape[:2]
         image_data = cv2.resize(frame, (input_size, input_size))
         image_data = image_data / 255.0
@@ -223,15 +200,17 @@ def main(_argv):
             if line_pos_1 > height or line_pos_2 > height:
                 print("the detection area:{}~{} over the screen:{}".format(line_pos_1, line_pos_2, height))
                 break
-            cv2.line(frame, (FLAGS.detect_pos_x, line_pos_1), (width, line_pos_1), (255, 0, 0), 2)
-            cv2.line(frame, (FLAGS.detect_pos_x, line_pos_2), (width, line_pos_2), (255, 0, 0), 2)
+            if FLAGS.frame_debug:
+                cv2.line(frame, (FLAGS.detect_pos_x, line_pos_1), (width, line_pos_1), (255, 0, 0), 2)
+                cv2.line(frame, (FLAGS.detect_pos_x, line_pos_2), (width, line_pos_2), (255, 0, 0), 2)
         else:
             # check detection area not over the screen
             if line_pos_1 > width or line_pos_2 > width:
                 print("the detection area:{}~{} over the screen:{}".format(line_pos_1, line_pos_2, width))
                 break
-            cv2.line(frame, (line_pos_1, FLAGS.detect_pos_y), (line_pos_1, height), (255, 0, 0), 2)
-            cv2.line(frame, (line_pos_2, FLAGS.detect_pos_y), (line_pos_2, height), (255, 0, 0), 2)
+            if FLAGS.frame_debug:
+                cv2.line(frame, (line_pos_1, FLAGS.detect_pos_y), (line_pos_1, height), (255, 0, 0), 2)
+                cv2.line(frame, (line_pos_2, FLAGS.detect_pos_y), (line_pos_2, height), (255, 0, 0), 2)
         # loop through objects and use class index to get class name, allow only classes in allowed_classes list
         names = []
         deleted_indx = []
@@ -244,17 +223,6 @@ def main(_argv):
                 names.append(class_name)
         names = np.array(names)
         counter = len(names)
-        if FLAGS.count:
-            cv2.putText(
-                frame,
-                "Objects being tracked: {}".format(counter),
-                (5, 35),
-                cv2.FONT_HERSHEY_COMPLEX_SMALL,
-                2,
-                (0, 255, 0),
-                2,
-            )
-            print("Objects being tracked: {}".format(counter))
         # delete detections that are not in allowed_classes
         bboxes = np.delete(bboxes, deleted_indx, axis=0)
         scores = np.delete(scores, deleted_indx, axis=0)
@@ -325,7 +293,8 @@ def main(_argv):
             else:
                 tracked_pos = x_cen
             if tracked_pos > (FLAGS.detect_pos - FLAGS.detect_distance) and tracked_pos < (FLAGS.detect_pos + FLAGS.detect_distance):
-                print("Tracker In Area ID: {}, Class: {},  BBox Coords (x_cen, y_cen): {}".format(str(track.track_id), class_name, (x_cen, y_cen)))
+                if FLAGS.frame_debug:
+                    print("Tracker In Area ID: {}, Class: {},  BBox Coords (x_cen, y_cen): {}".format(str(track.track_id), class_name, (x_cen, y_cen)))
                 checkDirection = True
                 # 當有設定FLAGS.detect_pos_y or FLAGS.detect_pos_x 需要物件位置大於設定值才計數
                 if FLAGS.detect_pos_y > 0 and y_cen < FLAGS.detect_pos_y:
@@ -343,7 +312,8 @@ def main(_argv):
                             else:
                                 orig_pos = obj['x_orig']
                             diff = tracked_pos - orig_pos
-                            print('diff:%d' % diff)
+                            if FLAGS.frame_debug:
+                                print('diff:%d' % diff)
                             if obj['direction'] == "none":
                                 if diff >= FLAGS.object_speed:
                                     obj['direction'] = "down"
@@ -355,10 +325,7 @@ def main(_argv):
                     if not existed:
                         obj = {"class": class_name, "id": track.track_id, "y_orig": y_cen, "x_orig": x_cen, "direction": "none"}
                         detect_objs.append(obj)
-            # if enable info flag then print details about each track
-            if FLAGS.info:
-                print("Tracker ID: {}, Class: {},  BBox Coords (xmin, ymin, xmax, ymax): {}".format(str(
-                    track.track_id), class_name, (int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]))))
+
         # define counter for every objects
         counter = {}
         for name in allowed_classes:
@@ -383,32 +350,29 @@ def main(_argv):
                     labelName = key.replace("up", "IN")
                 elif "down" in key:
                     labelName = key.replace("down", "OUT")
-            cv2.putText(frame, "{}:{}".format(labelName, counter[key]), (5, 35 + idx * 25), 0, 1.25, (255, 0, 0), 4, cv2.LINE_AA)
+            cv2.putText(frame, "{}:{}".format(labelName, counter[key]), (5, 35 + idx * 35), 0, 1.25, (255, 0, 0), 4, cv2.LINE_AA)
             idx += 1
-        # calculate frames per second of running detections
-        fps = 1.0 / (time.time() - start_time)
-        print("FPS: %.2f" % fps)
+
+         # calculate frames per second of running detections
+        if FLAGS.frame_debug:
+            fps = 1.0 / (time.time() - start_time)
+            print("FPS: %.2f" % fps)
+
         result = np.asarray(frame)
         result = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-        # if output flag is set, save video file
-        if FLAGS.output:
-            out.write(result)
         # resize the ouput frame to 1280x720
-        result = cv2.resize(result, (1280, 720))
+        # result = cv2.resize(result, (1280, 720))
         # show image on screen
-        if not FLAGS.dont_show:
-            cv2.imshow("Output Video", result)
+        cv2.imshow(WINDOW_NAME, result)
 
         # check exit when press keyboard 'q'
-        if cv2.waitKey(1) & 0xFF == ord("q"):
+        key = cv2.waitKey(1)
+        if key == ord('q') or key == ord('Q') :
             break
-        # keep wait unitl press 'n', just for debug
-        while FLAGS.frame_debug:
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord("n"):
-                break
-            elif key == ord("q"):
-                return
+        elif key == ord('F') or key == ord('f'):  # Toggle fullscreen
+            full_scrn = not full_scrn
+            set_display(WINDOW_NAME, full_scrn)
+
     # destroy resource
     cv2.destroyAllWindows()
 
