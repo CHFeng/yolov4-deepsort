@@ -3,6 +3,7 @@ import os
 # comment out below line to enable tensorflow logging outputs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = "3"
 import time
+from datetime import datetime as dt
 import tensorflow as tf
 
 physical_devices = tf.config.experimental.list_physical_devices("GPU")
@@ -28,6 +29,7 @@ from deep_sort.tracker import Tracker
 from tools import generate_detections as gdet
 
 WINDOW_NAME = 'YOLOV4_WINDOW'
+FONT_SIZE = 50
 
 flags.DEFINE_string("framework", "tf", "(tf, tflite, trt")
 flags.DEFINE_string("weights", "./checkpoints/yolov4-416", "path to weights file")
@@ -50,6 +52,12 @@ flags.DEFINE_string("allow_classes", "person", "allowed classes")
 
 def decode_fourcc(cc):
     return "".join([chr((int(cc) >> 8 * i) & 0xFF) for i in range(4)])
+
+
+def write_to_file(inCounter, outCounter):
+    record = "進場人次:{} 離場人次:{} 時間:{}\n".format(inCounter, outCounter, dt.now())
+    with open('person_count.txt', 'a', encoding='utf-8') as f:
+        f.write(record)
 
 
 def main(_argv):
@@ -118,10 +126,16 @@ def main(_argv):
     open_window(WINDOW_NAME, 'Welcome To Asia New Bay Area', 1920, 1080)
     # array to store detected objects
     detect_objs = []
+    # define counter for every objects
+    counter = {}
     # while video is running
     frame_num = 0
     # full screen flag
     full_scrn = False
+    # chinese font path
+    chineseFontPath = '/usr/share/fonts/truetype/arphic/uming.ttc'
+    chineseFont = ImageFont.truetype(chineseFontPath, FONT_SIZE)
+    lastWriteTime = dt.now()
     while True:
         start_time = time.time()
         return_value, frame = vid.read()
@@ -224,7 +238,6 @@ def main(_argv):
             else:
                 names.append(class_name)
         names = np.array(names)
-        counter = len(names)
         # delete detections that are not in allowed_classes
         bboxes = np.delete(bboxes, deleted_indx, axis=0)
         scores = np.delete(scores, deleted_indx, axis=0)
@@ -328,8 +341,6 @@ def main(_argv):
                         obj = {"class": class_name, "id": track.track_id, "y_orig": y_cen, "x_orig": x_cen, "direction": "none"}
                         detect_objs.append(obj)
 
-        # define counter for every objects
-        counter = {}
         for name in allowed_classes:
             key_up = name + "-up"
             key_down = name + "-down"
@@ -351,28 +362,29 @@ def main(_argv):
                 labelName = "進場人次"
             elif "down" in key:
                 labelName = "離場人次"
-            # chinese font path
-            fontpath = '/usr/share/fonts/truetype/arphic/uming.ttc'
-            font = ImageFont.truetype(fontpath, 50)
+            
+            
+            # change image format to PIL
             img_pil = Image.fromarray(frame)
             draw = ImageDraw.Draw(img_pil)
-            draw.text((15, 35 + idx * 50),  "{}:{}".format(labelName, counter[key]), font = font, fill = "red", stroke_width=2, stroke_fill="white")
+            draw.text((15, 35 + idx * FONT_SIZE),  "{}:{}".format(labelName, counter[key]), font = chineseFont, fill = "red", stroke_width=2, stroke_fill="white")
+            # change image format to cv2
             frame = np.array(img_pil)
             # cv2.putText(frame, "{}:{}".format(labelName, counter[key]), (15, 35 + idx * 35), 0, 1.25, (255, 0, 0), 4, cv2.LINE_AA)
             idx += 1
 
-         # calculate frames per second of running detections
+        # calculate frames per second of running detections
         if FLAGS.frame_debug:
             fps = 1.0 / (time.time() - start_time)
             print("FPS: %.2f" % fps)
-
+        # show image on screen
         result = np.asarray(frame)
         result = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-        # resize the ouput frame to 1280x720
-        # result = cv2.resize(result, (1280, 720))
-        # show image on screen
         cv2.imshow(WINDOW_NAME, result)
-
+        # wirte data into file every 300 seconds
+        diffTime = dt.now() - lastWriteTime
+        if diffTime.seconds >= 300:
+            write_to_file(counter['person-up'], counter['person-down'])
         # check exit when press keyboard 'q'
         key = cv2.waitKey(1)
         if key == ord('q') or key == ord('Q') :
@@ -381,6 +393,7 @@ def main(_argv):
             full_scrn = not full_scrn
             set_display(WINDOW_NAME, full_scrn)
 
+    write_to_file(counter['person-up'], counter['person-down'])
     # destroy resource
     cv2.destroyAllWindows()
 
