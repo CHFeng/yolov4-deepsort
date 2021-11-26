@@ -347,18 +347,16 @@ def main(_argv):
             if counter[key] == 0:
                 continue
             labelName = key
-            if FLAGS.flow_direction == "vertical":
-                if "up" in key:
-                    labelName = key.replace("up", "進場人次")
-                elif "down" in key:
-                    labelName = key.replace("down", "離場人次")
+            if "up" in key:
+                labelName = "進場人次"
+            elif "down" in key:
+                labelName = "離場人次"
             # chinese font path
             fontpath = '/usr/share/fonts/truetype/arphic/uming.ttc'
-            font = ImageFont.truetype(fontpath, 32)
+            font = ImageFont.truetype(fontpath, 50)
             img_pil = Image.fromarray(frame)
             draw = ImageDraw.Draw(img_pil)
-            b,g,r,a = 0,0,255,0
-            draw.text((15, 35 + idx * 35),  "{}:{}".format(labelName, counter[key]), font = font, fill = (b, g, r, a))
+            draw.text((15, 35 + idx * 50),  "{}:{}".format(labelName, counter[key]), font = font, fill = "red", stroke_width=2, stroke_fill="white")
             frame = np.array(img_pil)
             # cv2.putText(frame, "{}:{}".format(labelName, counter[key]), (15, 35 + idx * 35), 0, 1.25, (255, 0, 0), 4, cv2.LINE_AA)
             idx += 1
