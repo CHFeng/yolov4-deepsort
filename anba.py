@@ -359,9 +359,9 @@ def main(_argv):
                 continue
             labelName = key
             if "up" in key:
-                labelName = "進場人次"
-            elif "down" in key:
                 labelName = "離場人次"
+            elif "down" in key:
+                labelName = "進場人次"
             
             
             # change image format to PIL
