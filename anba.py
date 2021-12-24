@@ -46,7 +46,7 @@ flags.DEFINE_integer("detect_pos_x", "0", "the position coordinate for detecting
 flags.DEFINE_integer("detect_pos_y", "0", "the position coordinate for detecting")
 flags.DEFINE_integer("detect_distance", "50", "the distance for detecting")
 flags.DEFINE_integer("object_speed", "10", "the speed of object")
-flags.DEFINE_boolean("frame_debug", True, "show frame one by one for debug")
+flags.DEFINE_boolean("frame_debug", False, "show frame one by one for debug")
 flags.DEFINE_string("allow_classes", "person", "allowed classes")
 
 
@@ -300,7 +300,8 @@ def main(_argv):
             # calcuate position of bbox and draw circle on
             x_cen = int(bbox[0] + (bbox[2] - bbox[0]) / 2)
             y_cen = int(bbox[1] + (bbox[3] - bbox[1]) / 2)
-            cv2.circle(frame, (x_cen, y_cen), 5, (255, 0, 0), -1)
+            if FLAGS.frame_debug:
+                cv2.circle(frame, (x_cen, y_cen), 5, (255, 0, 0), -1)
             # check be tracked object on detection area
             tracked_pos = 0
             if FLAGS.flow_direction == "horizontal":
