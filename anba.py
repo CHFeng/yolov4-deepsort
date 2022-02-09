@@ -27,6 +27,8 @@ from deep_sort import preprocessing, nn_matching
 from deep_sort.detection import Detection
 from deep_sort.tracker import Tracker
 from tools import generate_detections as gdet
+# detect gender
+from detect_gender.detect_gender import check_gender
 
 WINDOW_NAME = 'YOLOV4_WINDOW'
 FONT_SIZE = 50
@@ -257,16 +259,26 @@ def main(_argv):
         indices = preprocessing.non_max_suppression(boxs, classes, nms_max_overlap, scores)
         detections = [detections[i] for i in indices]
 
-        # Call the tracker
+        # call the tracker
         tracker.predict()
         tracker.update(detections)
 
+        # call the gender detect
+        genderArr = []
+        # genderArr = check_gender(frame)
         # update tracks
         for track in tracker.tracks:
             if not track.is_confirmed() or track.time_since_update > 1:
                 continue
             bbox = track.to_tlbr()
             class_name = track.get_class()
+            label = class_name + "-" + str(track.track_id)
+            # check gender value
+            for gender in genderArr:
+                if 'id' not in gender and gender['x'] > int(bbox[0]) and gender['x'] < int(bbox[2]) and gender['y'] > int(
+                        bbox[1]) and gender['y'] < int(bbox[3]):
+                    gender['id'] = track.track_id
+                    label += "-" + gender['label']
 
             # draw bbox on screen
             color = colors[int(track.track_id) % len(colors)]
@@ -282,7 +294,7 @@ def main(_argv):
                 frame,
                 (int(bbox[0]), int(bbox[1] - 30)),
                 (
-                    int(bbox[0]) + (len(class_name) + len(str(track.track_id))) * 17,
+                    int(bbox[0]) + len(label) * 17,
                     int(bbox[1]),
                 ),
                 color,
@@ -290,7 +302,7 @@ def main(_argv):
             )
             cv2.putText(
                 frame,
-                class_name + "-" + str(track.track_id),
+                label,
                 (int(bbox[0]), int(bbox[1] - 10)),
                 0,
                 0.75,
@@ -310,7 +322,8 @@ def main(_argv):
                 tracked_pos = x_cen
             if tracked_pos > (FLAGS.detect_pos - FLAGS.detect_distance) and tracked_pos < (FLAGS.detect_pos + FLAGS.detect_distance):
                 if FLAGS.frame_debug:
-                    print("Tracker In Area ID: {}, Class: {},  BBox Coords (x_cen, y_cen): {}".format(str(track.track_id), class_name, (x_cen, y_cen)))
+                    print("Tracker In Area ID: {}, Class: {},  BBox Coords (x_cen, y_cen): {}".format(str(track.track_id), class_name,
+                                                                                                      (x_cen, y_cen)))
                 checkDirection = True
                 # 當有設定FLAGS.detect_pos_y or FLAGS.detect_pos_x 需要物件位置大於設定值才計數
                 if FLAGS.detect_pos_y > 0 and y_cen < FLAGS.detect_pos_y:
@@ -363,12 +376,16 @@ def main(_argv):
                 labelName = "離場人次"
             elif "down" in key:
                 labelName = "進場人次"
-            
-            
+
             # change image format to PIL
             img_pil = Image.fromarray(frame)
             draw = ImageDraw.Draw(img_pil)
-            draw.text((15, 35 + idx * FONT_SIZE),  "{}:{}".format(labelName, counter[key]), font = chineseFont, fill = "red", stroke_width=2, stroke_fill="white")
+            draw.text((15, 35 + idx * FONT_SIZE),
+                      "{}:{}".format(labelName, counter[key]),
+                      font=chineseFont,
+                      fill="red",
+                      stroke_width=2,
+                      stroke_fill="white")
             # change image format to cv2
             frame = np.array(img_pil)
             # cv2.putText(frame, "{}:{}".format(labelName, counter[key]), (15, 35 + idx * 35), 0, 1.25, (255, 0, 0), 4, cv2.LINE_AA)
@@ -390,7 +407,7 @@ def main(_argv):
             write_to_file(counter['person-up'], counter['person-down'])
         # check exit when press keyboard 'q'
         key = cv2.waitKey(1)
-        if key == ord('q') or key == ord('Q') :
+        if key == ord('q') or key == ord('Q'):
             break
         elif key == ord('F') or key == ord('f'):  # Toggle fullscreen
             full_scrn = not full_scrn
