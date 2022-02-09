@@ -45,13 +45,27 @@ flags.DEFINE_boolean("info", False, "show detailed info of tracked objects")
 flags.DEFINE_boolean("count", False, "count objects being tracked on screen")
 # the setting of object flow direction
 flags.DEFINE_string("flow_direction", "horizontal", "horizontal or vertical")
-flags.DEFINE_integer("detect_pos", "520", "the position coordinate for detecting")
-flags.DEFINE_integer("detect_pos_x", "0", "the position coordinate for detecting")
+flags.DEFINE_integer("detect_pos", "1600", "the position coordinate for detecting")
+flags.DEFINE_integer("detect_pos_x", "1480", "the position coordinate for detecting")
 flags.DEFINE_integer("detect_pos_y", "0", "the position coordinate for detecting")
-flags.DEFINE_integer("detect_distance", "20", "the distance for detecting")
-flags.DEFINE_integer("object_speed", "5", "the speed of object")
+flags.DEFINE_integer("detect_distance", "80", "the distance for detecting")
+flags.DEFINE_integer("object_speed", "35", "the speed of object")
 flags.DEFINE_boolean("frame_debug", False, "show frame one by one for debug")
 flags.DEFINE_string("allow_classes", "person,car,truck,bus,motorbike", "allowed classes")
+
+
+# calculate object move speed
+def calculate_object_move_speed(x1, y1, x2, y2, frameCount):
+    distance = pow((x2 - x1), 2) + pow((y2 - y1), 2)
+    distance = pow(distance, 0.5)
+    # 1 pixcel = 0.02m, FPS:20
+    speed = (distance * 0.02) / (frameCount / 20) * 3
+    print(x1, y1, x2, y2, distance, frameCount, speed)
+    # convert speed from m/s to km/hr
+    speed = int(speed / 1000 * 3600)
+    print("object Speed:{}".format(speed))
+
+    return speed if speed < 120 else 0
 
 
 def main(_argv):
@@ -316,7 +330,8 @@ def main(_argv):
             else:
                 tracked_pos = x_cen
             if tracked_pos > (FLAGS.detect_pos - FLAGS.detect_distance) and tracked_pos < (FLAGS.detect_pos + FLAGS.detect_distance):
-                print("Tracker In Area ID: {}, Class: {},  BBox Coords (x_cen, y_cen): {}".format(str(track.track_id), class_name, (x_cen, y_cen)))
+                print("Tracker In Area ID: {}, Class: {},  BBox Coords (x_cen, y_cen): {} W:{} H:{}".format(
+                    str(track.track_id), class_name, (x_cen, y_cen), int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])))
                 checkDirection = True
                 # 當有設定FLAGS.detect_pos_y or FLAGS.detect_pos_x 需要物件位置大於設定值才計數
                 if FLAGS.detect_pos_y > 0 and y_cen < FLAGS.detect_pos_y:
@@ -329,6 +344,7 @@ def main(_argv):
                     for obj in detect_objs:
                         if obj['id'] == track.track_id:
                             existed = True
+                            obj["frameCount"] += 1
                             if FLAGS.flow_direction == "horizontal":
                                 orig_pos = obj['y_orig']
                             else:
@@ -342,9 +358,20 @@ def main(_argv):
                                 elif diff <= -FLAGS.object_speed:
                                     obj['direction'] = "up"
                                     orig_pos = tracked_pos
+                                if obj['direction'] != "none":
+                                    # calculate speed
+                                    obj["speed"] = calculate_object_move_speed(obj["x_orig"], obj["y_orig"], x_cen, y_cen, obj["frameCount"])
                     # to append object into array if object doesn't existd
                     if not existed:
-                        obj = {"class": class_name, "id": track.track_id, "y_orig": y_cen, "x_orig": x_cen, "direction": "none"}
+                        obj = {
+                            "class": class_name,
+                            "id": track.track_id,
+                            "y_orig": y_cen,
+                            "x_orig": x_cen,
+                            "direction": "none",
+                            "frameCount": 0,
+                            "speed": 0
+                        }
                         detect_objs.append(obj)
             # if enable info flag then print details about each track
             if FLAGS.info:
@@ -355,14 +382,25 @@ def main(_argv):
         for name in allowed_classes:
             key_up = name + "-up"
             key_down = name + "-down"
+            key_up_speed = name + "-up-speed"
+            key_down_speed = name + "-down-speed"
             counter[key_up] = 0
             counter[key_down] = 0
+            counter[key_up_speed] = 0
+            counter[key_down_speed] = 0
         # record objects direction
         for obj in detect_objs:
             if obj['direction'] == "none":
                 continue
             key = obj['class'] + "-" + obj['direction']
             counter[key] += 1
+            if obj["speed"]:
+                key = key + "-speed"
+                if counter[key] == 0:
+                    counter[key] = obj["speed"]
+                else:
+                    counter[key] += obj["speed"]
+                    counter[key] = counter[key] // 2
         # show object direction counter value on screen
         idx = 0
         for key in counter:
@@ -374,7 +412,7 @@ def main(_argv):
                     labelName = key.replace("up", "IN")
                 elif "down" in key:
                     labelName = key.replace("down", "OUT")
-            cv2.putText(frame, "{}:{}".format(labelName, counter[key]), (5, 35 + idx * 25), 0, 0.75, (255, 0, 0), 1)
+            cv2.putText(frame, "{}:{}".format(labelName, counter[key]), (5, 35 + idx * 50), 0, 2, (255, 0, 0), 1)
             idx += 1
         # calculate frames per second of running detections
         fps = 1.0 / (time.time() - start_time)
