@@ -396,11 +396,7 @@ def main(_argv):
             counter[key] += 1
             if obj["speed"]:
                 key = key + "-speed"
-                if counter[key] == 0:
-                    counter[key] = obj["speed"]
-                else:
-                    counter[key] += obj["speed"]
-                    counter[key] = counter[key] // 2
+                counter[key] = (counter[key] + obj['speed']) // 2 if counter[key] > 0 else obj['speed']
         # show object direction counter value on screen
         idx = 0
         for key in counter:
