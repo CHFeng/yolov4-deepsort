@@ -1,5 +1,6 @@
 import os
-
+import requests
+import json
 # comment out below line to enable tensorflow logging outputs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = "3"
 import time
@@ -56,10 +57,32 @@ def decode_fourcc(cc):
     return "".join([chr((int(cc) >> 8 * i) & 0xFF) for i in range(4)])
 
 
+# 將人流計數資訊寫入檔案
 def write_to_file(inCounter, outCounter):
     record = "進場人次:{} 離場人次:{} 時間:{}\n".format(inCounter, outCounter, dt.now().strftime('%Y-%m-%d %H:%M'))
     with open('person_count.txt', 'a', encoding='utf-8') as f:
         f.write(record)
+
+
+# 傳送人流計數資訊到雄感動平台
+def send_to_platform(inCounter, outCounter):
+    now = dt.now().strftime('%Y-%m-%d %H:%M:%S')
+    # send post request
+    try:
+        url = "http://siungsport.com/management/api/QueryApi/QueryAPIFor_InsertCustomerFlow"
+        body = json.dumps({
+            'InCounter': inCounter,
+            'OutCounter': outCounter,
+            'GroupIndex': 1,  # 此數值固定為1(場域地點)
+            'RecordDateTime': now
+        })
+        result = requests.post(url, data=body)
+        if result.status_code != requests.codes.ok:
+            print("send request Err:" + json.loads(result.text))
+    except Exception as err:
+        print("write into DB Err:" + str(err))
+
+    # print("Send Post Request Success!", now)
 
 
 def main(_argv):
@@ -404,7 +427,7 @@ def main(_argv):
         if diffTime.seconds >= 300:
             # update last time stamp
             lastWriteTime = dt.now()
-            write_to_file(counter['person-up'], counter['person-down'])
+            send_to_platform(counter['person-up'], counter['person-down'])
         # check exit when press keyboard 'q'
         key = cv2.waitKey(1)
         if key == ord('q') or key == ord('Q'):
@@ -413,7 +436,7 @@ def main(_argv):
             full_scrn = not full_scrn
             set_display(WINDOW_NAME, full_scrn)
 
-    write_to_file(counter['person-up'], counter['person-down'])
+    send_to_platform(counter['person-up'], counter['person-down'])
     # destroy resource
     cv2.destroyAllWindows()
 
