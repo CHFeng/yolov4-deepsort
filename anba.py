@@ -69,6 +69,7 @@ def send_to_platform(inCounter, outCounter):
     now = dt.now().strftime('%Y-%m-%d %H:%M:%S')
     # send post request
     try:
+        headers = {'Content-type': 'application/json', 'Accept': 'application/json'}
         url = "http://siungsport.com/management/api/QueryApi/QueryAPIFor_InsertCustomerFlow"
         body = json.dumps({
             'InCounter': inCounter,
@@ -76,7 +77,7 @@ def send_to_platform(inCounter, outCounter):
             'GroupIndex': 1,  # 此數值固定為1(場域地點)
             'RecordDateTime': now
         })
-        result = requests.post(url, data=body)
+        result = requests.post(url, data=body, headers=headers)
         if result.status_code != requests.codes.ok:
             print("send request Err:" + json.loads(result.text))
     except Exception as err:
