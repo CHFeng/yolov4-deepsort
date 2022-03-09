@@ -1,3 +1,5 @@
+#! /opt/miniconda3/envs/dapeng/bin/python3
+
 import os
 import requests
 import json
@@ -44,7 +46,7 @@ flags.DEFINE_float("iou", 0.45, "iou threshold")
 flags.DEFINE_float("score", 0.50, "score threshold")
 # the setting of object flow direction
 flags.DEFINE_string("flow_direction", "horizontal", "horizontal or vertical")
-flags.DEFINE_integer("detect_pos", "520", "the position coordinate for detecting")
+flags.DEFINE_integer("detect_pos", "720", "the position coordinate for detecting")
 flags.DEFINE_integer("detect_pos_x", "0", "the position coordinate for detecting")
 flags.DEFINE_integer("detect_pos_y", "0", "the position coordinate for detecting")
 flags.DEFINE_integer("detect_distance", "50", "the distance for detecting")
@@ -83,7 +85,7 @@ def send_to_platform(inCounter, outCounter):
     except Exception as err:
         print("write into DB Err:" + str(err))
 
-    # print("Send Post Request Success!", now)
+    print("Send Post Request Success!", now)
 
 
 def main(_argv):
