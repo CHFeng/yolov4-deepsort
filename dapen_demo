@@ -5,16 +5,26 @@ if [ $1 == 'car' ]
 then
     if [ $# -eq 2 ] && [ $2 == 'live' ]
     then
-        python object_tracker.py --flow_direction horizontal --detect_pos 360 --allow_classes car,truck,bus --video https://www.youtube.com/watch?v=ZXtuVEDTAyE
+        python object_tracker.py --flow_direction horizontal --detect_pos 460 --detect_pos_start 700 --allow_classes car,truck,bus,motorbike --video https://www.youtube.com/watch?v=ZXtuVEDTAyE
     else
-        python object_tracker.py --flow_direction horizontal --detect_pos 360 --allow_classes car,truck,bus --video demo/car_demo.avi
+        python object_tracker.py --flow_direction horizontal --detect_pos 460 --detect_pos_start 700 --allow_classes car,truck,bus,motorbike --video demo/car_demo.avi
     fi
 elif [ $1 == 'person' ]
 then
     if [ $# -eq 2 ] && [ $2 == 'live' ]
     then
-        python object_tracker.py --flow_direction vertical --detect_pos 1500 --detect_pos_y 700 --allow_classes person --video https://www.youtube.com/watch?v=GB64WeZZQPQ
+        python object_tracker.py --flow_direction vertical --detect_pos 1500 --detect_pos_start 700 --allow_classes person --video https://www.youtube.com/watch?v=GB64WeZZQPQ
     else
-        python object_tracker.py --flow_direction vertical --detect_pos 1500 --detect_pos_y 700 --allow_classes person --video demo/person_demo.avi
+        python object_tracker.py --flow_direction vertical --detect_pos 1500 --detect_pos_start 700 --allow_classes person --video demo/person_demo.avi
     fi
+elif [ $1 == 'parking' ]
+then
+    if [ $# -eq 2 ] && [ $2 == 'live' ]
+    then
+        python object_tracker.py --flow_direction vertical --detect_pos 800 --detect_pos_start 350 --detect_pos_end 650 --video https://www.youtube.com/watch?v=GB64WeZZQPQ
+    else
+        python object_tracker.py --flow_direction vertical --detect_pos 800 --detect_pos_start 350 --detect_pos_end 650 --video demo/parking_demo.mp4
+    fi
+else
+    echo "Wrong command!"
 fi
